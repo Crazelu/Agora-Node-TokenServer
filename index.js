@@ -1,7 +1,10 @@
 const express = require('express');
+require('dotenv').config()
 const {RtcTokenBuilder, RtcRole} = require('agora-access-token');
+const server = require('http').createServer()
+const io = require('socket.io')(server)
 
-const PORT = 8080;
+const PORT = process.env.PORT;
 
 const APP_ID = process.env.APP_ID;
 const APP_CERTIFICATE = process.env.APP_CERTIFICATE;
@@ -18,10 +21,11 @@ const nocache = (req, resp, next) => {
 const generateAccessToken = (req, resp) => {
   // set response header
   resp.header('Acess-Control-Allow-Origin', '*');
-  // get channel name
-  const channelName = req.query.channelName;
-  if (!channelName) {
-    return resp.status(500).json({ 'error': 'channel is required' });
+  // get caller id
+  const callerId = req.query.callerId;
+
+  if (!callerId) {
+    return resp.status(500).json({ 'error': 'callerId is required' });
   }
   // get uid 
   let uid = req.query.uid;
@@ -44,13 +48,23 @@ const generateAccessToken = (req, resp) => {
   const currentTime = Math.floor(Date.now() / 1000);
   const privilegeExpireTime = currentTime + expireTime;
   // build the token
-  const token = RtcTokenBuilder.buildTokenWithUid(APP_ID, APP_CERTIFICATE, channelName, uid, role, privilegeExpireTime);
+  const token = RtcTokenBuilder.buildTokenWithUid(APP_ID, APP_CERTIFICATE, callerId, uid, role, privilegeExpireTime);
+
+  io.emit(callerId, { 'token': token, 'channelName': callerId })
+
   // return the token
-  return resp.json({ 'token': token });
+  return resp.json({ 'token': token, 'callerId': callerId});
 }
 
 app.get('/access_token', nocache, generateAccessToken);
 
 app.listen(PORT, () => {
   console.log(`Listening on port: ${PORT}`);
+});
+
+let server_port = process.env.SERVER_PORT;
+
+server.listen(server_port, function (err) {
+  if (err) throw err
+  console.log('Listening on port %d', server_port);
 });
